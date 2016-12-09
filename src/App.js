@@ -1,8 +1,11 @@
 import React, { Component } from 'react';
 import { Button, Glyphicon, Modal } from 'react-bootstrap';
+import axios from 'axios';
 
 import './App.css';
 import Campers from './Campers';
+import { withHash } from './History';
+import server from './config/config';
 
 class App extends Component {
 
@@ -10,31 +13,87 @@ class App extends Component {
     super();
     this.state = {
       campers: [],
-      showModal: false,
-      showInfo: false
+      username: '',
+      availableTime: '',
+      setup: [],
+      interests: ''
     };
 
     this.close = () => {
-      this.setState({ showModal: false, showInfo: false});
+      this.props.replaceHash('');
+      this.setState({
+        username: '',
+        availableTime: '',
+        setup: [],
+        interests: ''
+      });
     };
 
     this.open = () => {
-      this.setState({ showModal: true });
+      this.props.replaceHash('#add');
     };
 
     this.openInfo = () => {
-      this.setState({ showInfo: true });
+      this.props.replaceHash('#info');
     }
+
+    this.handleChange = this.handleChange.bind(this);
+    this.fetchData = this.fetchData.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
 }
 
-
   componentWillMount() {
-    fetch('https://enigmatic-dawn-95873.herokuapp.com/api/v1/posts')
+    this.fetchData();
+  }
+
+  fetchData() {
+    fetch(`${server}/api/v1/posts`)
       .then(result => result.json())
       .then(result => this.setState( { campers : result }))
+      .catch(e => console.error(e));
+  }
+
+  handleChange(e) {
+    // Get checked checkboxes
+    if (e.target.name === 'setup[]') {
+      const inputs = document.getElementsByName('setup[]')
+      let setup = [];
+      // TODO: refactor
+      for (let i = 0, len = inputs.length; i < len; i++) {
+        if (inputs[i].checked) setup.push(inputs[i].value)
+      }
+      this.setState({
+        setup
+      });
+    } else {
+      this.setState({
+        [e.target.id]: e.target.value
+      });
+    }
+  }
+
+  handleSubmit(e) {
+    e.preventDefault();
+    const post = {
+      username: this.state.username,
+      availableTime: this.state.availableTime,
+      setup: this.state.setup,
+      interests: this.state.interests
+    }
+    const url = `${server}/api/v1/posts`;
+
+    axios.post(url, post).then(res => {
+      if (res.status === 201) {
+        // temporary solution, because API sends back nested data
+        this.fetchData();
+      }
+    }).catch(e => console.log(e))
+    this.close();
   }
 
   render() {
+    let showModal = this.props.hash === '#add';
+    let showInfo = this.props.hash === '#info';
     return (
       <div className="App">
         <div className="App-header">
@@ -46,31 +105,39 @@ class App extends Component {
               {this.state.campers.map((camper, i) => <div key={i} className='col-xs-12 col-md-6'><Campers camper={camper} key={i} /></div>)}
             </div>
           </div>
-          <Modal show={this.state.showModal} onHide={this.close}>
+          <Modal show={showModal} onHide={this.close}>
             <Modal.Header closeButton>
               <Modal.Title>Add your details to the board</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-              <form action='https://enigmatic-dawn-95873.herokuapp.com/api/v1/add' method='post'>
+              <form onSubmit={this.handleSubmit}>
                 <label htmlFor='username'>Forum username:</label>
                 <div className='input-group'>
                   <span className="input-group-addon" id="basic-addon1">@</span>
-                  <input className='form-control' name='username' id='username' type='text' aria-describedby="basic-addon1" />
+                  <input pattern=".{1,20}" required title="Username between 1 and 20 characters" className='form-control' name='username' id='username' type='text' aria-describedby="basic-addon1" value={this.state.username} onChange={this.handleChange}/>
                 </div>
-                <label htmlFor='availableTime'>Available Time:</label>
+                <label htmlFor='availableTime'>Length of Time Available for Pairing (example: 03:00 = 3hrs):</label>
                 <div className='input-group'>
-                  <input className='form-control' name='availableTime' id='availableTime' type='text' pattern='\d{1,2}:\d{2}' aria-describedby="basic-addon2" />
+                  <input required title="Please enter in the format HH:mm" className='form-control' name='availableTime' id='availableTime' type='text' pattern='\d{1,2}:\d{2}' aria-describedby="basic-addon2" value={this.state.availableTime} onChange={this.handleChange}/>
                   <span className="input-group-addon" id="basic-addon2">HH:mm</span>
                 </div>
-                <label htmlFor='setup'>Preferred setup:</label>
-                <input className='form-control' name='setup' id='setup' type='text' />
+
+                <fieldset>
+                  <legend htmlFor="setup[]">Preferred Pairing Technology:</legend>
+                  <p>ScreenHero <input name="setup[]" type="checkbox" value="ScreenHero" onChange={this.handleChange}/></p>
+                  <p>TeamViewer <input name="setup[]" type="checkbox" value="TeamViewer" onChange={this.handleChange}/></p>
+                  <p>GoogleHangouts <input name="setup[]" type="checkbox" value="GoogleHangouts" onChange={this.handleChange}/></p>
+                  <p>Skype <input name="setup[]" type="checkbox" value="Skype" onChange={this.handleChange}/></p>
+                </fieldset>
+
+                Other: <input pattern=".{0}|.{1,30}" title="Keep it to minimum of 30 characters" className='form-control' name='setup' id='setup' type='text'/>
                 <label htmlFor='interests'>Interests:</label>
-                <input className='form-control' name='interests' id='interests' type='text' />
+                <input pattern=".{0}|.{1,30}" title="Keep it to minimum of 30 characters" className='form-control' name='interests' id='interests' type='text' value={this.state.interests} onChange={this.handleChange}/>
                 <input className='btn btn-success modal-submit' type='submit' value='Submit' />
               </form>
             </Modal.Body>
           </Modal>
-          <Modal show={this.state.showInfo} onHide={this.close}>
+          <Modal show={showInfo} onHide={this.close}>
             <Modal.Header closeButton>
               <Modal.Title>About</Modal.Title>
             </Modal.Header>
@@ -103,5 +170,9 @@ class App extends Component {
     );
   }
 }
+App.propTypes = {
+  hash: React.PropTypes.string.isRequired,
+  replaceHash: React.PropTypes.func.isRequired,
+}
 
-export default App;
+export default withHash(App);
